@@ -47,6 +47,8 @@ type Server struct {
 
 	aggregationSecretNamespace string
 	aggregationSecretName      string
+
+	ignoreDefaultSchemas bool
 }
 
 type Options struct {
@@ -61,6 +63,7 @@ type Options struct {
 	AggregationSecretName      string
 	ClusterRegistry            string
 	ServerVersion              string
+	IgnoreDefaultSchemas  bool
 }
 
 func New(ctx context.Context, restConfig *rest.Config, opts *Options) (*Server, error) {
@@ -80,6 +83,7 @@ func New(ctx context.Context, restConfig *rest.Config, opts *Options) (*Server, 
 		aggregationSecretName:      opts.AggregationSecretName,
 		ClusterRegistry:            opts.ClusterRegistry,
 		Version:                    opts.ServerVersion,
+		ignoreDefaultSchemas: opts.IgnoreDefaultSchemas,
 	}
 
 	if err := setup(ctx, server); err != nil {
@@ -138,15 +142,19 @@ func setup(ctx context.Context, server *Server) error {
 	server.ClusterCache = ccache
 	sf := schema.NewCollection(ctx, server.BaseSchemas, asl)
 
-	if err = resources.DefaultSchemas(ctx, server.BaseSchemas, ccache, server.ClientFactory, sf, server.Version); err != nil {
-		return err
+	if !server.ignoreDefaultSchemas {
+		if err = resources.DefaultSchemas(ctx, server.BaseSchemas, ccache, server.ClientFactory, sf, server.Version); err != nil {
+			return err
+		}
 	}
 
 	summaryCache := summarycache.New(sf, ccache)
 	summaryCache.Start(ctx)
 
-	for _, template := range resources.DefaultSchemaTemplates(cf, server.BaseSchemas, summaryCache, asl, server.controllers.K8s.Discovery()) {
-		sf.AddTemplate(template)
+	if !server.ignoreDefaultSchemas {
+		for _, template := range resources.DefaultSchemaTemplates(cf, server.BaseSchemas, summaryCache, asl, server.controllers.K8s.Discovery()) {
+			sf.AddTemplate(template)
+		}
 	}
 
 	cols, err := common.NewDynamicColumns(server.RESTConfig)
