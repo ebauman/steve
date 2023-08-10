@@ -1,7 +1,11 @@
 package main
 
 import (
+	"fmt"
+	"log"
 	"os"
+	"os/exec"
+	"runtime"
 
 	"github.com/rancher/steve/pkg/debug"
 	stevecli "github.com/rancher/steve/pkg/server/cli"
@@ -15,6 +19,25 @@ var (
 	config      stevecli.Config
 	debugconfig debug.Config
 )
+
+func openbrowser(url string) {
+	var err error
+
+	switch runtime.GOOS {
+	case "linux":
+		err = exec.Command("xdg-open", url).Start()
+	case "windows":
+		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+	case "darwin":
+		err = exec.Command("open", url).Start()
+	default:
+		err = fmt.Errorf("unsupported platform")
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
+
+}
 
 func main() {
 	app := cli.NewApp()
@@ -38,5 +61,6 @@ func run(_ *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	openbrowser(fmt.Sprintf("https://localhost:%d", config.HTTPSListenPort))
 	return s.ListenAndServe(ctx, config.HTTPSListenPort, config.HTTPListenPort, nil)
 }
